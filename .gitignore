@@ -1,0 +1,50 @@
+# Dependencies and package-manager caches
+node_modules/
+.npm/
+.pnpm-store/
+
+# Next.js and exported production builds
+.next/
+out/
+dist/
+next-env.d.ts
+
+# TypeScript and tooling caches
+*.tsbuildinfo
+.cache/
+.eslintcache
+.stylelintcache
+
+# Test and coverage output
+coverage/
+.nyc_output/
+*.lcov
+
+# Local environment files (keep shareable templates)
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.template
+
+# Logs and Node.js diagnostic reports
+logs/
+*.log
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Python caches from the data verification scripts
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Local deployment metadata
+.vercel/
+
+# OS metadata and editor temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
