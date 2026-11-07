@@ -29,7 +29,7 @@ const ISO_UTC_REGEX = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
  *
  * Interpretation of "ascending event_id":
  * In accordance with deterministic financial integrity rules, "ascending event_id" is defined as
- * strict lexicographical Unicode/ASCII code-point order (e.g. 'A' [U+0041] < 'a' [U+0061]),
+ * strict lexicographical UTF-16 code-unit order (the same as ASCII order for fixture IDs) (e.g. 'A' [U+0041] < 'a' [U+0061]),
  * completely decoupled from host OS locale, collator tables, or case-folding rules.
  */
 export function compareOrdinal(a: string, b: string): number {
@@ -41,7 +41,7 @@ export function compareOrdinal(a: string, b: string): number {
 /**
  * Chronologically orders lifecycle events:
  * 1. Timestamp ascending (earliest first)
- * 2. Ascending event_id (case-sensitive Unicode code-point ordinal comparator) for equal-timestamp ties
+ * 2. Ascending event_id (case-sensitive UTF-16 code-unit ordinal comparator) for equal-timestamp ties
  */
 export function compareEventsChronologically<T extends { event_at_ms: number; event_id: string }>(
   a: T,
@@ -88,7 +88,9 @@ export function parseIsoUtc(ts: string): { valid: boolean; ms: number } {
 
 /**
  * Validates positive base-10 safe integer cents.
- * Rejects decimal points, exponents (1e5), leading zeroes, negative numbers, and numbers > MAX_SAFE_INTEGER.
+ * Accepts leading zeroes (the digit regex permits them). Rejects decimal points,
+ * exponents (1e5), negative/zero values, and numbers > MAX_SAFE_INTEGER.
+ * A zero result with valid=false is an error sentinel; callers must check valid.
  */
 export function parsePositiveInt(val: string): { valid: boolean; amount: number } {
   const trimmed = val.trim();
@@ -108,6 +110,12 @@ export interface LifecycleProcessingResult {
   paymentsMap: Map<string, DerivedPayment>;
 }
 
+/**
+ * Pure pipeline: last physical revisions -> valid attempts/events -> per-payment
+ * capture/status/refunds -> derived rows and audit collections. See doc/02-data-and-lifecycle.md.
+ * Never validate before revision selection: a bad final revision must erase an earlier good one.
+ * Input rows remain unchanged; temporary capture/refund arrays are sorted independently.
+ */
 export function processLifecycle(
   rawAttempts: RawPaymentAttempt[],
   rawEvents: RawPaymentEvent[]
@@ -399,6 +407,7 @@ export function processLifecycle(
   });
 
   // --- 3. Group Candidate Events by Payment ID ---
+  // Empty buckets preserve valid attempts with no events: they still count and become pending.
   const eventsByPayment = new Map<string, ValidPaymentEvent[]>();
   validAttemptsMap.forEach((_, pid) => {
     eventsByPayment.set(pid, []);
@@ -453,6 +462,7 @@ export function processLifecycle(
 
     // Determine status:
     // A payment is captured if an eligible capture exists; otherwise failed if it has at least one valid FAIL; otherwise pending.
+    // Status is derived from existence, not replayed as last-event-wins. Refunds never rewrite it.
     const hasFail = events.some((ev) => ev.event_type === 'FAIL');
     let status: 'captured' | 'failed' | 'pending';
     if (selectedCapture) {
@@ -499,6 +509,8 @@ export function processLifecycle(
           return;
         }
 
+        // Validation guarantees a positive safe amount here. Each accepted sum is bounded
+        // by this one safe capture, so Number arithmetic remains exact within a payment.
         const refundAmt = rf.amount_cents || 0;
         if (refundAmt <= remainingCapturedCents) {
           acceptedRefunds.push(rf);
@@ -510,6 +522,7 @@ export function processLifecycle(
             payment_id: pid,
             event_type: 'REFUND',
             amount_cents: rf.amount_cents,
+            // Rejection does not spend the balance; the next callback may accept a smaller refund.
             reason: `Refund amount ($${(refundAmt / 100).toFixed(2)}) exceeds remaining captured balance ($${(remainingCapturedCents / 100).toFixed(2)})`,
           });
         }
@@ -561,6 +574,7 @@ export function processLifecycle(
  * Filter payments based on merchant, derived status, and case-insensitive search by payment ID.
  */
 export function filterPayments(payments: DerivedPayment[], filters: FilterState): DerivedPayment[] {
+  // All constraints combine with AND. Search is case-insensitive, unlike canonical ID grouping.
   return payments.filter((p) => {
     if (filters.merchant !== 'all' && p.merchant_id !== filters.merchant) {
       return false;
@@ -590,6 +604,8 @@ export function filterPayments(payments: DerivedPayment[], filters: FilterState)
 export function calculateKPIs(filteredPayments: DerivedPayment[]): FinancialKPIs {
   const validAttempts = filteredPayments.length;
   let capturedAttempts = 0;
+  // Convert each individually safe value before summing; converting a rounded Number total
+  // afterward cannot recover precision. Decimal strings keep the return shape portable.
   let grossCentsBig = 0n;
   let refundsCentsBig = 0n;
 
@@ -624,6 +640,7 @@ export function calculateMerchantBreakdown(filteredPayments: DerivedPayment[]): 
     { attempts: number; captured: number; grossBig: bigint; refundsBig: bigint }
   >();
 
+  // Fixed categories intentionally remain visible as zero rows when filters remove their payments.
   merchants.forEach((m) => {
     map.set(m, { attempts: 0, captured: 0, grossBig: 0n, refundsBig: 0n });
   });
@@ -699,7 +716,9 @@ export function calculateChannelBreakdown(filteredPayments: DerivedPayment[]): C
 }
 
 /**
- * Exports filtered payments as an RFC-4180 CSV string.
+ * Exports the supplied derived payment subset as CSV (not original events/audit rows).
+ * Current limitation: embedded quotes in IDs are not escaped and decimal formatting
+ * uses Number arithmetic. See doc/07-verification-and-limitations.md before generalizing.
  */
 export function exportPaymentsToCSV(payments: DerivedPayment[]): string {
   const headers = [

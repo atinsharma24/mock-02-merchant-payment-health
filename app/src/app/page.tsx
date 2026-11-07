@@ -3,6 +3,8 @@ import DashboardClient from '../components/DashboardClient';
 import ErrorState from '../components/ErrorState';
 import { loadAndProcessData } from '../../lib/loadData';
 
+// Re-ingest on full server requests rather than freezing this local-file snapshot at build time.
+// Client-side filters reuse props and do not trigger another filesystem read.
 export const dynamic = 'force-dynamic';
 
 export default function HomePage() {
@@ -18,6 +20,7 @@ export default function HomePage() {
     );
   }
 
+  // Pass plain derived records/audits; the engine lookup Map is deliberately not a client prop.
   return (
     <DashboardClient
       initialPayments={result.data.payments}

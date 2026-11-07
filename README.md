@@ -105,3 +105,7 @@ All values are exact, computed using deterministic integer-cent arithmetic:
    - Toggle to **"By Channel"** to view QR vs Link vs Terminal performance.
    - Click **"Export Filtered CSV"** to download the active dataset.
 
+
+## Architecture and code study guide
+
+See [doc/README.md](doc/README.md) for the architecture, file walkthroughs, lifecycle traces, interview questions, source index, and verification limitations.

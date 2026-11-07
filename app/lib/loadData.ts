@@ -49,6 +49,11 @@ export function getCanonicalDataDir(): string {
   return path.resolve(__dirname, '..', '..', 'data');
 }
 
+/**
+ * Server-only filesystem boundary by usage: do not import this module into a client component.
+ * Expected I/O/schema failures become analyst-facing result objects; individual bad rows
+ * instead proceed to lifecycle validation and appear in data-quality collections.
+ */
 export function loadAndProcessData(): LoadDataResult {
   const canonicalDir = getCanonicalDataDir();
   const attemptsPath = path.join(canonicalDir, 'payment_attempts.csv');
@@ -146,7 +151,8 @@ export function loadAndProcessData(): LoadDataResult {
     };
   }
 
-  // Map data rows (skipping header row 0)
+  // Map data rows (skipping header row 0). Keep structural metadata through deduplication;
+  // missing fields remain raw empty strings and must never become valid monetary zeroes.
   const rawAttempts: RawPaymentAttempt[] = attemptRecords.slice(1).map((r) => ({
     payment_id: r.fields[0] ?? '',
     merchant_id: r.fields[1] ?? '',

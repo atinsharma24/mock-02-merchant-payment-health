@@ -3,6 +3,7 @@ export type Channel = 'qr' | 'link' | 'terminal';
 export type EventType = 'CAPTURE' | 'FAIL' | 'REFUND';
 export type DerivedStatus = 'captured' | 'failed' | 'pending';
 
+// Raw export values are untrusted strings; TypeScript types do not replace runtime validation.
 export interface RawPaymentAttempt {
   payment_id: string;
   merchant_id: string;
@@ -45,6 +46,8 @@ export interface ValidPaymentEvent {
   amount_cents?: number; // undefined for FAIL, positive safe integer for CAPTURE/REFUND
 }
 
+// Dashboard model: contains applied financial events, not a complete FAIL/rejection history.
+// Per-payment refund totals are bounded by one safe capture; aggregate totals use strings below.
 export interface DerivedPayment {
   payment_id: string;
   merchant_id: MerchantId;

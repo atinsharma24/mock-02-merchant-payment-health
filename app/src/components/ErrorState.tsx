@@ -10,6 +10,7 @@ interface ErrorStateProps {
 }
 
 export default function ErrorState({ title, message, guidance }: ErrorStateProps) {
+  // Reload repeats server ingestion; it does not modify files or call a custom retry endpoint.
   const handleRetry = () => {
     window.location.reload();
   };

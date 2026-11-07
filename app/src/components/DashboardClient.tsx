@@ -53,6 +53,8 @@ export default function DashboardClient({
   const [breakdownView, setBreakdownView] = useState<'merchant' | 'channel'>('merchant');
   const [selectedPayment, setSelectedPayment] = useState<DerivedPayment | null>(null);
 
+  // One derived subset is shared by cards, both breakdowns, rows, and export.
+  // useMemo avoids recalculation on unrelated UI changes; it is not required for correctness.
   // Filtered payments
   const filteredPayments = useMemo(() => {
     return filterPayments(initialPayments, filters);
@@ -84,6 +86,8 @@ export default function DashboardClient({
     });
   };
 
+  // Browser-only download: business helper returns text, while Blob/DOM initiate the file save.
+  // Current cleanup limitation: this handler removes the anchor but does not revoke its object URL.
   const handleExportCSV = () => {
     const csvContent = exportPaymentsToCSV(filteredPayments);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -147,6 +151,7 @@ export default function DashboardClient({
     }
   };
 
+  // Audit scope is the entire ingested snapshot, intentionally independent of active filters.
   const totalAnomalies =
     initialDataQuality.supersededAttempts.length +
     initialDataQuality.supersededEvents.length +
@@ -782,6 +787,8 @@ export default function DashboardClient({
           )}
         </section>
 
+        {/* Details contain selected capture and accepted refunds only, not all raw lifecycle events.
+            This overlay currently lacks dialog focus management/Escape handling; see doc chapter 7. */}
         {/* Payment Detail Modal */}
         {selectedPayment && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">

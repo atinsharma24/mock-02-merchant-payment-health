@@ -1,5 +1,6 @@
 /**
- * Lightweight, robust RFC-4180 compliant CSV parser with structural validation.
+ * Character-based CSV parser with structural diagnostics.
+ * Supports the fixture contract; full RFC conformance is not established by existing tests.
  * Supports quoted fields, escaped quotes (""), embedded newlines within quotes, and CRLF/LF line breaks.
  * Tracks source row line numbers and identifies malformed quoting syntax.
  */
@@ -11,6 +12,8 @@ export interface CSVRowRecord {
   malformedReason?: string;
 }
 
+// Preserve malformed records and identifiable IDs for dedupe-before-validation downstream.
+// A logical record may span physical lines; `line` identifies its first physical line.
 export function parseCSVRecords(content: string): CSVRowRecord[] {
   const records: CSVRowRecord[] = [];
   let currentRowFields: string[] = [];
@@ -152,6 +155,8 @@ export function parseCSVRecords(content: string): CSVRowRecord[] {
     });
   }
 
+  // This intentionally discards trailing all-whitespace records, unlike interior blank rows.
+  // It also means a trailing malformed-but-empty record can lose its diagnostic.
   // Remove trailing empty lines
   while (records.length > 0 && records[records.length - 1].fields.every((f) => f.trim() === '')) {
     records.pop();
